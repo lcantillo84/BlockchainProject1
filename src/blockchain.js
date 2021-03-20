@@ -63,18 +63,24 @@ class Blockchain {
      * that this method is a private method.
      */
     _addBlock(block) {
+           let self =this ;
 
         return new Promise(async (resolve, reject) => {
-            block.height=this.chain.length;
-            block.time=new Date().getTime().toString().slice(0,-3);
-            if(this.chain.length>0){
-                block.previousHash=this.chain[this.chain.length-1].hash;
-              }
-                block.hash= SHA256(JSON.stringify(block)).toString();
-                this.chain.push(block);
-                this.height++;
+           let blockchainHeight= await this.getChainHeight();
+            if(blockchainHeight>=0){
+                block.previousBlockHash=self.chain[self.height].hash;
+            }
+
+           self.height=blockchainHeight + 1;
+           block.height = blockchainHeight + 1;
+           block.time=new Date().getTime().toString().slice(0,-3);
+           block.hash = SHA256(JSON.stringify(block)).toString();
+            let foundedError =await self.validateChain();
+            if(foundedError==0){
+                self.chain.push(block);
                 resolve(block);
-                reject('error ocurred when adding the block');
+            }
+            reject({message:"The Blockchain  is not valid ", error:foundedError, status:false});
 
         });
     }
@@ -117,10 +123,10 @@ class Blockchain {
           let  messagtime= parseInt(message.split(':')[1]);
           let currentTime = parseInt(new Date().getTime().toString().slice(0, -3));
          if(currentTime<(messagtime+(5*60*1000))){
-           let valid=bitcoinMessage.verify(message, address, signature);
-            if(valid){
+           let validmessage=bitcoinMessage.verify(message, address, signature);
+            if(validmessage){
               let block=new BlockClass.Block({owner:address, start: star});
-              let addedblock=self._addBlock(block);
+              resolve=( await self._addBlock(block));
             }else{
                 reject('Not valid');
             }
