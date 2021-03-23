@@ -68,7 +68,7 @@ class Blockchain {
         return new Promise(async (resolve, reject) => {
            let blockchainHeight= await this.getChainHeight();
             if(blockchainHeight>=0){
-                block.previousBlockHash=self.chain[self.height].hash;
+               block.previousBlockHash  = this.chain[this.chain.length-1].hash;
             }
 
            self.height=blockchainHeight + 1;
@@ -76,11 +76,16 @@ class Blockchain {
            block.time=new Date().getTime().toString().slice(0,-3);
            block.hash = SHA256(JSON.stringify(block)).toString();
             let foundedError =await self.validateChain();
-            if(foundedError==0){
-                self.chain.push(block);
-                resolve(block);
+            if(foundedError){
+                  reject({message:"The Blockchain  is not valid ", error:foundedError, status:false});
             }
-            reject({message:"The Blockchain  is not valid ", error:foundedError, status:false});
+            else
+            {
+
+              self.chain.push(block);
+              resolve(block);
+            }
+
 
         });
     }
@@ -118,23 +123,31 @@ class Blockchain {
      * @param {*} star
      */
     submitStar(address, message, signature, star) {
-        let self = this;
-        return new Promise(async (resolve, reject) => {
-          let  messagtime= parseInt(message.split(':')[1]);
-          let currentTime = parseInt(new Date().getTime().toString().slice(0, -3));
-         if(currentTime<(messagtime+(5*60*1000))){
-           let validmessage=bitcoinMessage.verify(message, address, signature);
-            if(validmessage){
-              let block=new BlockClass.Block({owner:address, start: star});
-              resolve=( await self._addBlock(block));
-            }else{
-                reject('Not valid');
-            }
-         }else{
-             reject('Submit your request before 5 min');
-         }
-        });
-    }
+      let self = this;
+       return new Promise(async (resolve, reject) => {
+         let  messagtime= parseInt(message.split(':')[1]);
+         let currentTime = parseInt(new Date().getTime().toString().slice(0, -3));
+        let timeDif=currentTime-messagtime;
+        console.log(timeDif);
+         if(timeDif<300){
+
+          let validmessage = bitcoinMessage.verify(message, address, signature);
+
+           if(validmessage){
+               let block = new BlockClass.Block({"star":star,"owner":address});
+             let newBlockAdded= await self._addBlock(block);
+             resolve(newBlockAdded);
+
+           }else{
+               reject('Not valid');
+
+           }
+        }else{
+            reject('Submit your request before 5 min');
+        }
+       });
+   }
+
 
     /**
      * This method will return a Promise that will resolve with the Block
@@ -202,34 +215,38 @@ class Blockchain {
      * 2. Each Block should check the with the previousBlockHash
      */
     validateChain() {
-        let self = this;
-        let errorLog = [];
+      let self = this;
+        let errors= [];
         return new Promise(async (resolve, reject) => {
             let validatedBlocks=[];
-            let index=0;
-            self.chain.forEach((x)=>{
-                if(x.validate()){
-                    validatedBlocks.push(x);
+
+            self.chain.forEach((x, index)=>{
+                if(x.height>0){
+                    let previousBlock = self.chain[index - 1];
+                    if(block.previousBlockHash != previousBlock.hash){
+                        let errorMessage=`Block ${index} previousBlockHash set to ${block.previousBlockHash}, but dont match with  ${previousBlock.hash}`;
+                        errors.push(errorMessage);
+                    }
                 }
-               if(x.height>0){
-                   let previousHash = x.previousBlockHash;
-                   let blockHash = self.chain[index-1].hash;
-                   if(previousHash !=blockHash){
-                       errorLog.push(`Block heigh:${x.height} pevious hash don't match `)
-                   }
-               }
-               index++;
+                validatedBlocks.push(block.validate());
             });
-            Promise(async(resolve,reject)=>{
-                errorLog.forEach((x)=>{
-                        if(x!=null){
-                            resolve(x);
-                        }else{
-                            reject("Did not find any errors");
-                        }
-                });
+
+        Promise.all(validatedBlocks)
+               .then((results)=>{
+            results.forEach((x, index)=>{
+                if(!x){
+                    const invalidBlock = self.chain[index];
+                            let errorMessage = `Block ${index} hash (${invalidBlock.hash}) is invalid`;
+                            errors.push(errorMessage);
+                }
+
+             });
+             resolve(errors);
+
             });
-        });
+
+
+         });
     }
 
 }
