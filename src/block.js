@@ -51,9 +51,9 @@ class Block {
             }else{
                 resolve(true);  // Returning the Block is valid
             }
-          
 
-           
+
+
 
         });
     }
